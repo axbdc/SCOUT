@@ -24,7 +24,25 @@ export default function CalendarScreen() {
     const [selected, setSelected] = useState(new Date());
 
     useEffect(() => {
-        api.get("/events").then(({ data }) => setEvents(data));
+        api.get("/events").then(({ data }) => {
+            setEvents(data);
+            // If current month has no events, jump to first month with upcoming events
+            const today = new Date();
+            const currentMonthHasEvents = data.some((e) => {
+                const d = new Date(e.date);
+                return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+            });
+            if (!currentMonthHasEvents) {
+                const upcoming = [...data]
+                    .map((e) => new Date(e.date))
+                    .filter((d) => d >= new Date(today.getFullYear(), today.getMonth(), 1))
+                    .sort((a, b) => a - b)[0];
+                if (upcoming) {
+                    setCursor(new Date(upcoming.getFullYear(), upcoming.getMonth(), 1));
+                    setSelected(upcoming);
+                }
+            }
+        });
     }, []);
 
     const eventsByDate = useMemo(() => {
