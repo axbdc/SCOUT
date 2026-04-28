@@ -1,0 +1,42 @@
+{
+  "summary": "First iteration end-to-end testing of SCOUT (mobile PWA). Backend API 25/26 tests passing (96%); frontend flows for login, register, dashboard, spots, calendar, event detail, booking, settings, profile, scout-black all work. CRITICAL bug: Map screen is completely broken (uncaught runtime error 'Map container is already initialized') due to React.StrictMode + react-leaflet@4.2.1 incompatibility — full white/blank UI when navigating to /map.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/google/session", "issue": "Returns 500 instead of 400 when called with neither X-Session-ID header nor JSON body. `await request.json()` raises on empty body. Wrap in try/except or short-circuit when content-length is 0."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MapScreen", "issue": "CRITICAL: Page crashes with uncaught runtime error 'Map container is already initialized.' coming from react-leaflet inside React.StrictMode. The MapContainer is mounted/unmounted twice in dev mode (StrictMode double-invocation) and react-leaflet 4.2.1 cannot tear down between renders. Result: /map renders a completely blank black screen and the dev error overlay appears in development. Reproducible on hard refresh AND on bottom-nav navigation. Affects all marker rendering and the entire Map feature.", "selector": "[data-testid=\"map-screen\"] .leaflet-container", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scout_api.py",
+    "/app/test_reports/pytest/scout_api_results.xml"
+  ],
+  "action_items": [
+    "FIX (CRITICAL): Map page broken. Options: (a) Remove <React.StrictMode> wrapper from /app/frontend/src/index.js (simplest, common fix in CRA + react-leaflet stacks); (b) Upgrade react-leaflet (4.2.1 has the StrictMode dev bug — versions >=4.2.1 still affected, consider 5.x with React 18+); (c) Wrap MapContainer in a key that only assigns once per mount and ensure cleanup with `whenCreated`/`map.remove()`. Recommended fix: remove StrictMode for production parity since the rest of the app does not require it.",
+    "FIX (MINOR): /api/auth/google/session — return 400 instead of 500 when both X-Session-ID header and JSON body are absent. Wrap `await request.json()` in try/except or check `request.headers.get('content-length')`.",
+    "OPTIONAL: Calendar opens on October 2024 (events default month) — works, but consider showing today's month and an info banner '0 eventos' if user lands in Jan 2026 with no events; otherwise confusing UX once October 2024 is in the past."
+  ],
+  "critical_code_review_comments": [
+    "MapScreen.jsx: react-leaflet StrictMode bug not handled. Production build may also exhibit subtle re-init issues if any parent re-mounts MapContainer.",
+    "server.py: google_session endpoint reads request body unconditionally; raises on empty body. Should validate content-length before parsing.",
+    "server.py: /api/auth/google/session inserts a new user_sessions record on every login without dedup, leading to row growth. Consider upsert by session_token or user_id.",
+    "server.py: register/login set Secure SameSite=None cookies — correct for cross-site preview URL. Verified cookies set & read across requests.",
+    "BottomNav data-testids are nav-home/nav-spots/nav-map/nav-events/nav-profile (not bottom-nav-* as some prompts assume). All 5 tabs render and route correctly. Profile reflects user (Arthur, 1250 pts, BLACK)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scout_api.py (created)"
+  ],
+  "success_rate": {"backend": "96%", "frontend": "85% (Map feature 0%)"},
+  "test_credentials": "arthur@scout.pt / ScoutBlack2024!",
+  "seed_data_creation": "None — seeded data already created on backend startup (6 spots, 6 events, 8 partnerships, 1 admin user). Test users created during tests have prefix 'test_/booker_/sub_/notif_' and live in MongoDB; can be cleaned with prefix later if needed.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suite at /app/backend/tests/test_scout_api.py is the regression baseline (run via `pytest backend/tests/test_scout_api.py -v`). Critical frontend blocker is the Map page (/map) — verify after main agent's fix by visiting https://google-stitch-app.preview.emergentagent.com/map and confirming .leaflet-container renders with markers and no 'Map container is already initialized' page error. Also re-run the google_session 400 minor fix.",
+  "rca_of_the_issue": "Root cause of Map crash: index.js wraps <App/> in <React.StrictMode>. In dev, StrictMode mounts → unmounts → remounts MapContainer. react-leaflet 4.2.1 keeps a reference to the underlying Leaflet map on the same DOM node, so the second mount throws 'Map container is already initialized.' which propagates and triggers React error boundary / red-screen overlay, leaving the page blank. Reproduction: log in → click bottom nav 'Mapa' OR open /map directly. Mitigation: drop StrictMode (quickest), or upgrade react-leaflet, or force-remove the leaflet instance on unmount with a custom hook."
+}
