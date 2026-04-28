@@ -294,8 +294,12 @@ async def google_session(request: Request, response: Response):
     """Exchange session_id (from Emergent OAuth) for a session_token cookie."""
     session_id = request.headers.get("X-Session-ID")
     if not session_id:
-        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
-        session_id = (body or {}).get("session_id") if isinstance(body, dict) else None
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict):
+            session_id = body.get("session_id")
     if not session_id:
         raise HTTPException(status_code=400, detail="Missing session_id")
     async with httpx.AsyncClient(timeout=10.0) as client_http:
