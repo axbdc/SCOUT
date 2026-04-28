@@ -1,0 +1,119 @@
+{
+  "project_name": "SCOUT",
+  "theme": "dark",
+  "archetype": "Archetype 5 (Jewel & Luxury) + Archetype 2 (Performance Pro)",
+  "vibe": "Automotive luxury, exclusive inner circle, high-octane, precise telemetry",
+  "colors": {
+    "background": {
+      "base": "#050505",
+      "surface": "#0F0F11",
+      "surface_elevated": "#1A1A1E",
+      "glass": "rgba(15, 15, 17, 0.7)"
+    },
+    "primary": {
+      "DEFAULT": "#E53935",
+      "hover": "#F44336",
+      "foreground": "#FFFFFF"
+    },
+    "premium": {
+      "gold": "#D4AF37",
+      "gold_light": "#F3E5AB",
+      "gold_dark": "#996515",
+      "gradient": "linear-gradient(135deg, #996515 0%, #D4AF37 50%, #F3E5AB 100%)"
+    },
+    "text": {
+      "primary": "#FAFAFA",
+      "secondary": "#A1A1AA",
+      "tertiary": "#52525B",
+      "on_primary": "#FFFFFF"
+    },
+    "border": {
+      "DEFAULT": "rgba(255, 255, 255, 0.08)",
+      "focus": "#E53935",
+      "premium": "rgba(212, 175, 55, 0.3)"
+    },
+    "status": {
+      "live": "#10B981",
+      "warning": "#F59E0B"
+    }
+  },
+  "typography": {
+    "font_family": {
+      "heading": "Unbounded, sans-serif",
+      "body": "Manrope, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-4xl font-black tracking-tighter leading-tight",
+      "h2": "text-2xl font-bold tracking-tight",
+      "h3": "text-xl font-bold tracking-tight",
+      "h4": "text-lg font-semibold tracking-tight",
+      "body": "text-base font-medium leading-relaxed",
+      "body_sm": "text-sm font-medium",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-zinc-500"
+    }
+  },
+  "spacing": {
+    "container_padding": "p-4 sm:p-6",
+    "section_gap": "gap-8",
+    "item_gap": "gap-4"
+  },
+  "layout": {
+    "strategy": "mobile-first PWA within desktop frame",
+    "desktop_wrapper": "max-w-md mx-auto min-h-screen bg-[#050505] relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] md:ring-1 md:ring-white/10 md:my-8 md:rounded-[40px]",
+    "bottom_nav": "fixed bottom-0 left-0 right-0 h-20 bg-black/80 backdrop-blur-xl border-t border-white/5 flex justify-around items-center px-4 pb-safe z-50 md:absolute md:rounded-b-[40px]",
+    "top_nav": "sticky top-0 z-40 w-full h-16 bg-black/60 backdrop-blur-xl border-b border-white/5 flex items-center px-4 justify-between"
+  },
+  "components": {
+    "button": {
+      "primary": "bg-primary text-white rounded-md font-bold text-sm h-12 px-6 flex items-center justify-center transition-transform hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(229,57,53,0.3)]",
+      "secondary": "bg-white/5 text-white rounded-md font-bold text-sm h-12 px-6 flex items-center justify-center border border-white/10 hover:bg-white/10 transition-colors",
+      "premium": "bg-gradient-to-r from-[#996515] to-[#D4AF37] text-black rounded-md font-black text-sm h-12 px-6 flex items-center justify-center uppercase tracking-widest shadow-[0_0_30px_rgba(212,175,55,0.2)]"
+    },
+    "card": {
+      "base": "bg-[#0F0F11] rounded-xl border border-white/5 overflow-hidden",
+      "interactive": "hover:border-white/20 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/50 cursor-pointer",
+      "premium": "bg-[#0F0F11] rounded-xl border border-[#D4AF37]/30 overflow-hidden relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-[#D4AF37]/10 before:to-transparent before:pointer-events-none"
+    },
+    "input": {
+      "base": "w-full bg-[#1A1A1E] border border-white/10 rounded-md h-12 px-4 text-white placeholder:text-zinc-600 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-body"
+    },
+    "badges": {
+      "category": "px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs font-bold text-white uppercase tracking-wider",
+      "live": "px-3 py-1 rounded-full bg-red-500/20 border border-red-500/50 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-2 before:content-[''] before:block before:w-2 before:h-2 before:bg-red-500 before:rounded-full before:animate-pulse"
+    }
+  },
+  "media": {
+    "images": {
+      "splash_bg": "https://images.pexels.com/photos/596815/pexels-photo-596815.jpeg",
+      "feed": [
+        "https://images.unsplash.com/photo-1627667928346-5fc86d099a5c",
+        "https://images.pexels.com/photos/18320398/pexels-photo-18320398.jpeg",
+        "https://images.unsplash.com/photo-1672024110512-f7028b49db28",
+        "https://images.unsplash.com/photo-1618866157430-b4d2e6a8800b"
+      ],
+      "events": [
+        "https://images.pexels.com/photos/9284135/pexels-photo-9284135.jpeg",
+        "https://images.pexels.com/photos/3525540/pexels-photo-3525540.jpeg",
+        "https://images.unsplash.com/photo-1661840244226-2636d82a4035"
+      ],
+      "profile": "https://images.pexels.com/photos/35187762/pexels-photo-35187762.jpeg",
+      "premium_card": "https://images.unsplash.com/photo-1639133694967-640f255f10fc"
+    }
+  },
+  "testing": {
+    "required_attributes": [
+      "data-testid"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure the layout mimics a mobile PWA. Use `max-w-md mx-auto` to center the app on desktop screens, with rounded corners resembling a phone frame.",
+    "The primary font for headings is Unbounded. Keep tracking tight.",
+    "Implement Scout Black checkout as a mocked UI sequence with a heavy premium feel using the gold gradient and the premium card image.",
+    "Apply `data-testid` to all interactive components (buttons, links, inputs).",
+    "Use Leaflet/OpenStreetMap for the map integration.",
+    "The UI is exclusively dark mode. Avoid using full white backgrounds.",
+    "For the bottom nav, use an absolute position if inside the desktop phone frame, but fixed if viewed on mobile.",
+    "Use lucide-react or phosphor-icons for filled Material-like icons."
+  ]
+}
