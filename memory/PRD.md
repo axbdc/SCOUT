@@ -80,3 +80,23 @@ See /app/memory/test_credentials.md
 - ✅ Admin Dashboard com **gráfico SVG de receita mensal** (stacked bars: Submissões/Subscrições/Fotos)
 - ✅ Anti-farming: pontos de "Eu Vou" só uma vez por evento, +200 de aprovação só uma vez por submissão
 - Tests: 40/40 backend passing, 100% frontend critical flows
+
+## v4 (current iteration) — Segurança Real
+
+- ✅ **Alterar Password**: verifica password atual, rejeita social-only e password igual à atual
+- ✅ **2FA TOTP** (Google Authenticator / Authy): setup com QR code + secret manual, verify, disable. Login bloqueia com 403 `2fa_required` quando ativo até receber código válido
+- ✅ **Login Biométrico** (WebAuthn / Passkeys): registo de credencial via `navigator.credentials.create` com platform authenticator, usa Face ID / Touch ID / Windows Hello. Verificação real server-side via `webauthn` lib (challenge/response). Botão fica disabled em devices sem suporte
+- ✅ **Dispositivos Confiáveis**: cada login cria registo `user_devices` com device_id no JWT. Lista mostra todos com badge "Atual", IP e last_seen. Revoke remove o device E invalida o JWT (validação a cada request)
+- ✅ Hardening adicional: get_user_by_jwt verifica que device ainda existe (token revocation real)
+
+## Endpoints novos (v4)
+- GET /api/auth/security/status
+- POST /api/auth/change-password
+- POST /api/auth/2fa/setup, verify, disable
+- GET /api/auth/sessions
+- DELETE /api/auth/sessions/{device_id}
+- POST /api/auth/biometric/register/options, verify
+- POST /api/auth/biometric/disable
+- POST /api/auth/biometric/auth/options, verify (login flow)
+
+Tests: 15/15 novos + 40/40 regressão = **55/55 backend** + 100% frontend

@@ -226,6 +226,17 @@ async def get_user_by_jwt(token: str) -> Optional[dict]:
         payload = pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         if payload.get("type") != "access":
             return None
+        # Check device still trusted (revocation)
+        device_id = payload.get("device_id")
+        if device_id:
+            dev = await db.user_devices.find_one({"device_id": device_id})
+            if not dev:
+                return None
+            # Update last_seen
+            await db.user_devices.update_one(
+                {"device_id": device_id},
+                {"$set": {"last_seen": datetime.now(timezone.utc).isoformat()}},
+            )
         return await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0})
     except Exception:
         return None
@@ -385,6 +396,8 @@ async def change_password(payload: ChangePasswordIn, user: dict = Depends(get_cu
         raise HTTPException(status_code=400, detail="Esta conta usa login social - não tem password definida")
     if not verify_password(payload.current_password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Password atual incorreta")
+    if payload.new_password == payload.current_password:
+        raise HTTPException(status_code=400, detail="A nova password tem de ser diferente da atual")
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {"password_hash": hash_password(payload.new_password)}},
