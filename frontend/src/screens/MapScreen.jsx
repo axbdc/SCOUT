@@ -4,9 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../lib/api";
 import TopBar from "../components/TopBar";
-import { Crosshair, Speed } from "../components/Icons";
+import { Crosshair, Speed, Pin } from "../components/Icons";
 
-// Fix Leaflet default marker icons (avoid 404)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -28,6 +27,13 @@ const goldIcon = L.divIcon({
     iconAnchor: [15, 15],
 });
 
+const meIcon = L.divIcon({
+    className: "scout-me-marker",
+    html: `<div style="width:18px;height:18px;border-radius:50%;background:#3B82F6;border:2px solid #fff;box-shadow:0 0 14px rgba(59,130,246,0.7);"></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+});
+
 const FILTERS = ["All", "Track Day", "Concours", "Rally", "Meet"];
 
 function Recenter({ center }) {
@@ -42,13 +48,13 @@ export default function MapScreen() {
     const [params] = useSearchParams();
     const navigate = useNavigate();
     const [events, setEvents] = useState([]);
-    const [spots, setSpots] = useState([]);
     const [filter, setFilter] = useState("All");
-    const [center, setCenter] = useState([38.7223, -9.1393]); // Lisbon
+    const [center, setCenter] = useState([38.7223, -9.1393]);
+    const [me, setMe] = useState(null);
+    const [geoState, setGeoState] = useState("idle");
 
     useEffect(() => {
         api.get("/events").then(({ data }) => setEvents(data));
-        api.get("/spots").then(({ data }) => setSpots(data));
     }, []);
 
     useEffect(() => {
@@ -57,11 +63,39 @@ export default function MapScreen() {
         if (!isNaN(lat) && !isNaN(lng)) setCenter([lat, lng]);
     }, [params]);
 
-    const visibleEvents = events.filter((e) => filter === "All" || e.type === filter);
+    const visible = events.filter((e) => filter === "All" || e.type === filter);
+
+    const findMe = () => {
+        if (!navigator.geolocation) {
+            setGeoState("error");
+            return;
+        }
+        setGeoState("loading");
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const c = [pos.coords.latitude, pos.coords.longitude];
+                setMe(c);
+                setCenter(c);
+                setGeoState("ok");
+            },
+            () => setGeoState("error"),
+            { enableHighAccuracy: true, timeout: 8000 }
+        );
+    };
 
     return (
         <div className="relative" data-testid="map-screen">
-            <TopBar title="EVENT MAP" subtitle="SCOUT · Lisbon" onBack={false} />
+            <TopBar title="EVENT MAP" subtitle="SCOUT · Lisbon" onBack={false}
+                right={
+                    <button
+                        onClick={findMe}
+                        data-testid="map-near-me"
+                        className="h-9 px-3 rounded-full bg-blue-500/15 border border-blue-500/40 hover:bg-blue-500/25 flex items-center gap-1.5 text-blue-300 text-[10px] font-bold uppercase tracking-widest transition"
+                    >
+                        <Pin size={12} /> {geoState === "loading" ? "..." : "Perto de mim"}
+                    </button>
+                }
+            />
 
             <div className="px-4 pt-3 pb-2">
                 <div className="flex gap-2 overflow-x-auto scout-scroll">
@@ -82,6 +116,12 @@ export default function MapScreen() {
                 </div>
             </div>
 
+            {geoState === "error" && (
+                <div className="px-4 mb-2 text-[11px] text-amber-400" data-testid="geo-error">
+                    Localização não disponível. Permite geolocalização no browser.
+                </div>
+            )}
+
             <div className="relative">
                 <MapContainer
                     center={center}
@@ -92,7 +132,8 @@ export default function MapScreen() {
                 >
                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     <Recenter center={center} />
-                    {visibleEvents.map((e) => (
+                    {me && <Marker position={me} icon={meIcon}><Popup>Estás aqui</Popup></Marker>}
+                    {visible.map((e) => (
                         <Marker
                             key={e.event_id}
                             position={[e.lat, e.lng]}
@@ -105,39 +146,10 @@ export default function MapScreen() {
                                     <div style={{ fontSize: 11, color: "#52525b" }}>{e.location_name}</div>
                                     <button
                                         onClick={() => navigate(`/events/${e.event_id}`)}
-                                        style={{
-                                            marginTop: 8,
-                                            background: "#E53935",
-                                            color: "white",
-                                            border: "none",
-                                            padding: "6px 12px",
-                                            borderRadius: 6,
-                                            fontWeight: 700,
-                                            fontSize: 11,
-                                            cursor: "pointer",
-                                        }}
+                                        style={{ marginTop: 8, background: "#E53935", color: "white", border: "none", padding: "6px 12px", borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: "pointer" }}
                                     >
                                         Ver evento
                                     </button>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
-                    {spots.map((s) => (
-                        <Marker
-                            key={s.spot_id}
-                            position={[s.lat, s.lng]}
-                            icon={L.divIcon({
-                                className: "scout-spot-marker",
-                                html: `<div style="width:20px;height:20px;border-radius:50%;background:rgba(229,57,53,0.4);border:1.5px solid #E53935;"></div>`,
-                                iconSize: [20, 20],
-                                iconAnchor: [10, 10],
-                            })}
-                        >
-                            <Popup>
-                                <div style={{ minWidth: 140 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 12 }}>{s.title}</div>
-                                    <div style={{ fontSize: 10, color: "#52525b" }}>{s.category} · {s.region}</div>
                                 </div>
                             </Popup>
                         </Marker>
@@ -155,7 +167,7 @@ export default function MapScreen() {
             </div>
 
             <div className="absolute top-[120px] right-4 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur border border-white/10 text-[11px] font-bold uppercase tracking-wider text-white flex items-center gap-1.5 z-[400]">
-                <Speed size={12} className="text-red-500" /> {visibleEvents.length} {visibleEvents.length === 1 ? "evento" : "eventos"}
+                <Speed size={12} className="text-red-500" /> {visible.length} {visible.length === 1 ? "evento" : "eventos"}
             </div>
         </div>
     );

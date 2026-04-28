@@ -17,8 +17,11 @@ function formatDate(d) {
 export default function CalendarScreen() {
     const navigate = useNavigate();
     const [events, setEvents] = useState([]);
-    const [cursor, setCursor] = useState(new Date(2024, 9, 1)); // October 2024 to match seed
-    const [selected, setSelected] = useState(new Date(2024, 9, 9));
+    const [cursor, setCursor] = useState(() => {
+        const t = new Date();
+        return new Date(t.getFullYear(), t.getMonth(), 1);
+    });
+    const [selected, setSelected] = useState(new Date());
 
     useEffect(() => {
         api.get("/events").then(({ data }) => setEvents(data));

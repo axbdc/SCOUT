@@ -2,18 +2,18 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
-import { Compass, Map, Calendar, Stars, ChevronRight, PartnerIcon, ArrowRight, Trophy } from "../components/Icons";
+import { Map, Calendar, Stars, ChevronRight, PartnerIcon, ArrowRight, Trophy, Plus, Heart, Camera } from "../components/Icons";
 
 export default function Dashboard() {
     const { user } = useAuth();
     const [partners, setPartners] = useState([]);
     const [blackPartners, setBlackPartners] = useState([]);
-    const [eventsCount, setEventsCount] = useState(0);
+    const [upcoming, setUpcoming] = useState([]);
 
     useEffect(() => {
         api.get("/partnerships?tier=open").then(({ data }) => setPartners(data.slice(0, 3)));
         api.get("/partnerships?tier=black").then(({ data }) => setBlackPartners(data.slice(0, 2)));
-        api.get("/events").then(({ data }) => setEventsCount(data.length));
+        api.get("/events").then(({ data }) => setUpcoming(data.slice(0, 3)));
     }, []);
 
     const firstName = user?.name?.split(" ")[0] || "Pilot";
@@ -38,15 +38,56 @@ export default function Dashboard() {
                 <span>pontos acumulados</span>
             </div>
 
-            {/* Quick actions */}
             <div className="grid grid-cols-4 gap-2 mb-6 reveal reveal-2">
-                <QuickAction to="/dashboard" Icon={Compass} label="Feed" active />
+                <QuickAction to="/calendar" Icon={Calendar} label="Eventos" active />
                 <QuickAction to="/map" Icon={Map} label="Mapa" />
-                <QuickAction to="/calendar" Icon={Calendar} label="Calendário" />
-                <QuickAction to="/scout-black" Icon={Stars} label="Scout Black" gold />
+                <QuickAction to="/submit-event" Icon={Plus} label="Submeter" />
+                <QuickAction to="/scout-black" Icon={Stars} label="Black" gold />
             </div>
 
-            {/* Black promo */}
+            {/* Upcoming events strip */}
+            <div className="flex items-end justify-between mb-3 reveal reveal-2">
+                <h2 className="font-display font-bold text-white text-lg">Próximos Eventos</h2>
+                <Link to="/calendar" className="text-[10px] uppercase tracking-[0.15em] text-red-500 font-bold flex items-center gap-1" data-testid="see-all-events">
+                    Ver todos <ArrowRight size={12} />
+                </Link>
+            </div>
+            <div className="-mx-5 px-5 mb-7 flex gap-3 overflow-x-auto scout-scroll pb-1">
+                {upcoming.length === 0 && (
+                    <div className="text-zinc-600 text-xs uppercase tracking-widest py-8" data-testid="upcoming-empty">
+                        Sem eventos aprovados ainda
+                    </div>
+                )}
+                {upcoming.map((e, i) => (
+                    <Link
+                        key={e.event_id}
+                        to={`/events/${e.event_id}`}
+                        data-testid={`upcoming-${e.event_id}`}
+                        className="flex-shrink-0 w-[240px] rounded-xl overflow-hidden border border-white/5 bg-[#0F0F11] hover:border-white/15 transition reveal"
+                        style={{ animationDelay: `${i * 0.05}s` }}
+                    >
+                        <div className="relative aspect-[5/3]">
+                            <img src={e.image} alt={e.title} className="absolute inset-0 w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur text-[9px] font-bold uppercase tracking-wider text-white">
+                                {e.type}
+                            </div>
+                            {e.exclusive && (
+                                <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full gold-bg text-black text-[9px] font-black uppercase tracking-wider">
+                                    Exclusive
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-3">
+                            <div className="font-display font-bold text-white text-sm truncate">{e.title}</div>
+                            <div className="text-[10px] uppercase tracking-[0.15em] text-red-500 font-mono-tech mt-1">
+                                {formatDateChip(e.date)} · {e.time_start}
+                            </div>
+                        </div>
+                    </Link>
+                ))}
+            </div>
+
             {!user?.is_black && (
                 <Link
                     to="/scout-black"
@@ -56,7 +97,7 @@ export default function Dashboard() {
                     <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#D4AF37]/10 blur-3xl" />
                     <div className="text-[10px] tracking-[0.3em] uppercase gold-shimmer font-bold mb-1">Membro Elite</div>
                     <h3 className="font-display font-bold text-white text-lg leading-tight">
-                        Junta-te à Elite.<br />Desbloqueia o <span className="gold-shimmer">Scout Black</span>
+                        Junta-te à Elite. <span className="gold-shimmer">Scout Black</span>
                     </h3>
                     <p className="text-zinc-500 text-xs mt-2 leading-relaxed">
                         Acesso prioritário a eventos, conteúdos exclusivos e parcerias premium de detailing.
@@ -79,7 +120,6 @@ export default function Dashboard() {
                 </div>
             )}
 
-            {/* Open Partnerships */}
             <div className="flex items-end justify-between mb-3 reveal reveal-3">
                 <h2 className="font-display font-bold text-white text-lg">Parcerias Abertas</h2>
                 <Link to="/partnerships" className="text-[10px] uppercase tracking-[0.15em] text-red-500 font-bold flex items-center gap-1" data-testid="see-all-partners">
@@ -87,21 +127,16 @@ export default function Dashboard() {
                 </Link>
             </div>
             <div className="space-y-3 mb-7">
-                {partners.map((p, i) => (
-                    <PartnerRow key={p.partnership_id} p={p} delay={i} />
-                ))}
+                {partners.map((p, i) => <PartnerRow key={p.partnership_id} p={p} delay={i} />)}
             </div>
 
-            {/* Black partnerships */}
             <div className="flex items-end justify-between mb-3">
                 <h2 className="font-display font-bold text-white text-lg flex items-center gap-2">
                     Benefícios Elite <Stars size={14} className="text-[#D4AF37]" />
                 </h2>
             </div>
             <div className="space-y-3 mb-8">
-                {blackPartners.map((p) => (
-                    <PartnerRow key={p.partnership_id} p={p} locked={!user?.is_black} elite />
-                ))}
+                {blackPartners.map((p) => <PartnerRow key={p.partnership_id} p={p} locked={!user?.is_black} elite />)}
             </div>
         </div>
     );
@@ -133,11 +168,7 @@ function PartnerRow({ p, locked, elite, delay = 0 }) {
             style={{ animationDelay: `${0.1 + delay * 0.05}s` }}
             data-testid={`partner-${p.partnership_id}`}
         >
-            <div
-                className={`w-11 h-11 rounded-lg flex items-center justify-center ${
-                    elite ? "bg-[#D4AF37]/15 text-[#D4AF37]" : "bg-white/5 text-red-500"
-                }`}
-            >
+            <div className={`w-11 h-11 rounded-lg flex items-center justify-center ${elite ? "bg-[#D4AF37]/15 text-[#D4AF37]" : "bg-white/5 text-red-500"}`}>
                 <PartnerIcon name={p.icon} size={20} />
             </div>
             <div className="flex-1 min-w-0">
@@ -153,4 +184,10 @@ function PartnerRow({ p, locked, elite, delay = 0 }) {
             )}
         </div>
     );
+}
+
+function formatDateChip(iso) {
+    const d = new Date(iso);
+    const months = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+    return `${d.getDate()} ${months[d.getMonth()]}`;
 }

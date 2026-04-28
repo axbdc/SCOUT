@@ -1,0 +1,42 @@
+{
+  "summary": "SCOUT iteration 2 end-to-end testing. Backend: 24/24 pytest passing (100%) covering health, auth (admin/member), events filtering by approved-only, spots endpoint removed, paid event submission flow (token + 402 reuse + visibility), favorites, photo gallery + mocked purchase, full admin lifecycle (stats/events approve+reject+delete/users patch+delete with self-protect/photos add+delete). Frontend: admin login redirects to /admin and full admin console works (stats render, pending event approve/reject/delete, users list with BLACK/ADMIN toggles, photos add); member login redirects to /dashboard with 4-tab bottom nav (Home/Eventos/Mapa/Perfil — Spots correctly removed); FAB 'Submeter' (testid fab-submit-event) shows on dashboard/events/map and is hidden on /admin and /events/:id; calendar defaults to current month (Abril 2026); Map screen now renders (.leaflet-container + 'Perto de mim' + recenter + 5 markers — iteration 1 blocker FIXED); Event detail shows Detalhes/Galeria tabs with favorite/share/add-to-calendar buttons; Profile shows 3 tabs Reservados/Submetidos/Favoritos; Scout Black page renders 3D premium-card-3d and subscribe-btn → checkout. All mocked payment flows (submission-fee €10, photo buy, subscription checkout) work end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Eventos (Calendar)", "issues": ["Calendar correctly defaults to current month (Abril 2026) per spec, but all 5 seeded events live in Feb–Mar 2026, so a fresh user lands on an empty month with 'Sem eventos neste dia'. Consider auto-jumping to the next month containing events, or showing a chip 'Ver próximos eventos →' that scrolls calendar to Feb 2026."]},
+      {"screen": "Admin bottom nav", "issues": ["Admin nav buttons Stats/Eventos/Users/Fotos exist (testids OK) but on 430px viewport only 2 fit visibly without horizontal scroll in some screenshots — verify spacing on small phones."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scout_api.py",
+    "/app/test_reports/pytest/scout_api_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL UX: Calendar landing month — when current month has 0 events, auto-skip to next month with events OR show CTA 'Ver Fevereiro 2026 (3 eventos)'. Otherwise users see an empty calendar on first open.",
+    "OPTIONAL: Update test_credentials.md if any new admin email convention changes — currently aligned with iteration 2 (alexandrexbdcosme@gmail.com / Yanka.2003)."
+  ],
+  "critical_code_review_comments": [
+    "server.py admin_delete_user: uses `_['user_id']` to compare — works because Depends(require_admin) returns the admin user dict, but the variable name `_` is misleading; rename to `current_admin` for readability.",
+    "server.py admin_stats: subscription_revenue_eur sums `amount` across only ACTIVE subs — cancelled sub revenue not tracked. Acceptable for MVP but document.",
+    "server.py event submission: `submitted_at` is set on submission insert but not declared in Event model (extra='ignore' so it's silently dropped on read). Add `submitted_at: Optional[str]` to Event model so admin UI can sort/show submission date.",
+    "EventDetail.jsx tab testids are `tab-overview` and `tab-gallery` (literal TABS array values), but the visible labels are 'Detalhes' / 'Galeria'. Consider renaming testids to `tab-detalhes` / `tab-galeria` to match user-facing labels and avoid test confusion.",
+    "MapScreen.jsx: works now but still wraps MapContainer at root — keep an eye on React.StrictMode if it's ever re-enabled (iteration 1 had a crash here). The fact that the page now works confirms StrictMode was removed or react-leaflet was upgraded.",
+    "Profile.jsx uses Tailwind dynamic class strings like `bg-${c}-500/15 text-${c}-400` for submission status colors — these will be purged in production builds. Use a static colorMap object with full class names instead.",
+    "SubmitFAB: hide-list uses `loc.pathname.startsWith('/events/')` which also hides on `/events/booked-confirmation` style sub-routes; OK for now but document."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scout_api.py (rewritten for iteration 2 — removed Spots tests, added submission/favorites/photos/admin full coverage)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100% of critical flows verified"},
+  "test_credentials": "Admin: alexandrexbdcosme@gmail.com / Yanka.2003 · Member: alex.member@scout.pt / scoutcreator · Legacy: arthur@scout.pt / ScoutBlack2024!",
+  "seed_data_creation": "Tests created several TEST_-prefixed users (test_/sub_/sub2_/del_/buyer_) and submitted events titled 'TEST_Event_*' / 'TEST_AdminFlow_*'. The TEST_AdminFlow_* event is deleted by the admin lifecycle test; TEST_Event_a8c638 (from submission test) remains in DB as a pending submission and was visible in admin Pendentes panel. Cleanup: `db.users.delete_many({email: /^(test|sub|del|buyer)_/})` and `db.events.delete_many({title: /^TEST_/})`.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite at /app/backend/tests/test_scout_api.py (24 tests, all passing). Run: `REACT_APP_BACKEND_URL=https://google-stitch-app.preview.emergentagent.com pytest backend/tests/test_scout_api.py -v`. Iteration 1 Map blocker is RESOLVED — leaflet container renders with markers and 'Perto de mim' button works (geolocation will fail in headless browsers, just shows the geo-error chip). EventDetail tab testids are tab-overview/tab-gallery (not tab-detalhes/tab-galeria). Submit FAB testid is fab-submit-event. Profile tab testids are tab-bookings/tab-submissions/tab-favorites. ScoutBlack premium 3D card testid is premium-card-3d.",
+  "rca_of_the_issue": "N/A — no critical bugs found in iteration 2. The previous iteration 1 Map crash (React.StrictMode + react-leaflet 4.x) is no longer reproducible — likely main agent removed StrictMode wrapper or upgraded react-leaflet. The minor google_session 500-on-empty-body issue from iter 1 is also resolved (now returns 400/401)."
+}

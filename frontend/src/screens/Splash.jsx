@@ -10,7 +10,8 @@ export default function Splash() {
     useEffect(() => {
         if (loading) return;
         const t = setTimeout(() => {
-            navigate(user ? "/dashboard" : "/login", { replace: true });
+            if (!user) navigate("/login", { replace: true });
+            else navigate(user.role === "admin" ? "/admin" : "/dashboard", { replace: true });
         }, 2200);
         return () => clearTimeout(t);
     }, [user, loading, navigate]);

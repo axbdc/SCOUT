@@ -1,6 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/lib/AuthContext";
+import { AuthProvider } from "@/lib/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Frame from "@/components/Frame";
 
@@ -9,7 +9,6 @@ import Login from "@/screens/Login";
 import Register from "@/screens/Register";
 import AuthCallback from "@/screens/AuthCallback";
 import Dashboard from "@/screens/Dashboard";
-import SpotsFeed from "@/screens/SpotsFeed";
 import MapScreen from "@/screens/MapScreen";
 import CalendarScreen from "@/screens/CalendarScreen";
 import EventDetail from "@/screens/EventDetail";
@@ -18,10 +17,11 @@ import Settings from "@/screens/Settings";
 import ScoutBlack from "@/screens/ScoutBlack";
 import Checkout from "@/screens/Checkout";
 import Partnerships from "@/screens/Partnerships";
+import SubmitEvent from "@/screens/SubmitEvent";
+import Admin from "@/screens/Admin";
 
 function AppRouter() {
     const location = useLocation();
-    // Synchronous detection of OAuth callback - prevents race with AuthProvider
     if (location.hash?.includes("session_id=")) return <AuthCallback />;
 
     return (
@@ -30,9 +30,13 @@ function AppRouter() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+
+            {/* Admin (protected, role=admin enforced inside) */}
+            <Route path="/admin/*" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+
+            {/* Member app */}
             <Route element={<ProtectedRoute><Frame /></ProtectedRoute>}>
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/spots" element={<SpotsFeed />} />
                 <Route path="/map" element={<MapScreen />} />
                 <Route path="/calendar" element={<CalendarScreen />} />
                 <Route path="/events/:id" element={<EventDetail />} />
@@ -41,6 +45,7 @@ function AppRouter() {
                 <Route path="/scout-black" element={<ScoutBlack />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/partnerships" element={<Partnerships />} />
+                <Route path="/submit-event" element={<SubmitEvent />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

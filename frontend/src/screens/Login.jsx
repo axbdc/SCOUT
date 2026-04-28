@@ -18,8 +18,8 @@ export default function Login() {
         setError("");
         setLoading(true);
         try {
-            await login(email.trim(), password);
-            navigate("/dashboard", { replace: true });
+            const u = await login(email.trim(), password);
+            navigate(u?.role === "admin" ? "/admin" : "/dashboard", { replace: true });
         } catch (err) {
             setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
         } finally {

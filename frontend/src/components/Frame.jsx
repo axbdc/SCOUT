@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import BottomNav from "./BottomNav";
+import SubmitFAB from "./SubmitFAB";
 
 export default function Frame() {
     return (
@@ -7,6 +8,7 @@ export default function Frame() {
             <div className="pb-[88px] min-h-screen">
                 <Outlet />
             </div>
+            <SubmitFAB />
             <BottomNav />
         </div>
     );

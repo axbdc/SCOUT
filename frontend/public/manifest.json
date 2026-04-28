@@ -1,0 +1,17 @@
+{
+  "short_name": "SCOUT",
+  "name": "SCOUT — Automotive Intelligence",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "theme_color": "#050505",
+  "background_color": "#050505",
+  "description": "O círculo restrito da cultura automóvel em Portugal. Encontra. Fotografa. Acelera.",
+  "orientation": "portrait"
+}
