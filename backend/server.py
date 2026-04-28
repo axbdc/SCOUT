@@ -19,6 +19,19 @@ from typing import List, Optional, Literal
 import bcrypt
 import jwt as pyjwt
 import httpx
+import pyotp
+import qrcode
+import io
+import base64
+import json
+import secrets as pysecrets
+from webauthn import generate_registration_options, verify_registration_response, generate_authentication_options, verify_authentication_response
+from webauthn.helpers import options_to_json as _wa_options_to_json
+from webauthn.helpers.cose import COSEAlgorithmIdentifier
+from webauthn.helpers.structs import (
+    AuthenticatorSelectionCriteria, UserVerificationRequirement, ResidentKeyRequirement,
+    PublicKeyCredentialDescriptor, RegistrationCredential, AuthenticationCredential,
+)
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -63,6 +76,16 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+    code: Optional[str] = None  # 2FA TOTP code, if enabled
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6)
+
+
+class TOTPVerifyIn(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
 
 
 CarCategory = Literal["Clássicos", "Desportivos", "JDM", "Americanos", "Todos"]
@@ -240,7 +263,7 @@ def cookie_kwargs():
 
 # ----------------- Auth Endpoints -----------------
 @api.post("/auth/register", response_model=UserOut)
-async def register(payload: RegisterIn, response: Response):
+async def register(payload: RegisterIn, request: Request, response: Response):
     email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email já registado")
@@ -259,19 +282,74 @@ async def register(payload: RegisterIn, response: Response):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
-    response.set_cookie("access_token", create_access_token(user_id), **cookie_kwargs())
+    device_id = await create_session(user_id, request)
+    response.set_cookie("access_token", create_access_token_with_device(user_id, device_id), **cookie_kwargs())
     return serialize_user(doc)
 
 
+def parse_user_agent(ua: str) -> str:
+    if not ua:
+        return "Dispositivo Desconhecido"
+    if "iPhone" in ua:
+        return "iPhone"
+    if "iPad" in ua:
+        return "iPad"
+    if "Android" in ua:
+        if "Mobile" in ua:
+            return "Android Phone"
+        return "Android Tablet"
+    if "Macintosh" in ua or "Mac OS X" in ua:
+        return "Mac"
+    if "Windows" in ua:
+        return "Windows PC"
+    if "Linux" in ua:
+        return "Linux PC"
+    return "Browser"
+
+
+async def create_session(user_id: str, request: Request) -> str:
+    """Create a trusted-device session record. Returns device_id."""
+    device_id = f"dev_{uuid.uuid4().hex[:12]}"
+    ua = request.headers.get("user-agent", "")
+    await db.user_devices.insert_one({
+        "device_id": device_id,
+        "user_id": user_id,
+        "label": parse_user_agent(ua),
+        "user_agent": ua,
+        "ip": request.client.host if request.client else "?",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_seen": datetime.now(timezone.utc).isoformat(),
+        "current": True,
+    })
+    return device_id
+
+
+def create_access_token_with_device(user_id: str, device_id: str) -> str:
+    payload = {
+        "sub": user_id,
+        "type": "access",
+        "device_id": device_id,
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
+    }
+    return pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
 @api.post("/auth/login", response_model=UserOut)
-async def login(payload: LoginIn, response: Response):
+async def login(payload: LoginIn, request: Request, response: Response):
     email = payload.email.lower().strip()
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash"):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     if not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
-    response.set_cookie("access_token", create_access_token(user["user_id"]), **cookie_kwargs())
+    if user.get("two_factor_enabled"):
+        if not payload.code:
+            raise HTTPException(status_code=403, detail={"error": "2fa_required", "message": "Código 2FA necessário"})
+        secret = user.get("two_factor_secret")
+        if not secret or not pyotp.TOTP(secret).verify(payload.code, valid_window=1):
+            raise HTTPException(status_code=401, detail="Código 2FA inválido")
+    device_id = await create_session(user["user_id"], request)
+    response.set_cookie("access_token", create_access_token_with_device(user["user_id"], device_id), **cookie_kwargs())
     return serialize_user(user)
 
 
@@ -287,6 +365,263 @@ async def logout(response: Response, request: Request):
 
 @api.get("/auth/me", response_model=UserOut)
 async def me(user: dict = Depends(get_current_user)):
+    return serialize_user(user)
+
+
+# ----------------- Security: Password / 2FA / Sessions / Biometric -----------------
+@api.get("/auth/security/status")
+async def security_status(user: dict = Depends(get_current_user)):
+    return {
+        "has_password": bool(user.get("password_hash")),
+        "two_factor_enabled": bool(user.get("two_factor_enabled")),
+        "biometric_enabled": bool(user.get("biometric_credentials")),
+        "auth_provider": user.get("auth_provider", "email"),
+    }
+
+
+@api.post("/auth/change-password")
+async def change_password(payload: ChangePasswordIn, user: dict = Depends(get_current_user)):
+    if not user.get("password_hash"):
+        raise HTTPException(status_code=400, detail="Esta conta usa login social - não tem password definida")
+    if not verify_password(payload.current_password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Password atual incorreta")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": hash_password(payload.new_password)}},
+    )
+    return {"ok": True}
+
+
+@api.post("/auth/2fa/setup")
+async def two_factor_setup(user: dict = Depends(get_current_user)):
+    if user.get("two_factor_enabled"):
+        raise HTTPException(status_code=400, detail="2FA já está ativada")
+    secret = pyotp.random_base32()
+    otpauth_url = pyotp.TOTP(secret).provisioning_uri(name=user["email"], issuer_name="SCOUT")
+    # Generate QR PNG → base64
+    img = qrcode.make(otpauth_url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    # Store pending secret (not active yet until verified)
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"two_factor_secret_pending": secret}},
+    )
+    return {"secret": secret, "otpauth_url": otpauth_url, "qr_png_base64": qr_b64}
+
+
+@api.post("/auth/2fa/verify")
+async def two_factor_verify(payload: TOTPVerifyIn, user: dict = Depends(get_current_user)):
+    secret = user.get("two_factor_secret_pending") or user.get("two_factor_secret")
+    if not secret:
+        raise HTTPException(status_code=400, detail="Configura primeiro o 2FA")
+    if not pyotp.TOTP(secret).verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=401, detail="Código inválido")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"two_factor_enabled": True, "two_factor_secret": secret}, "$unset": {"two_factor_secret_pending": ""}},
+    )
+    return {"enabled": True}
+
+
+@api.post("/auth/2fa/disable")
+async def two_factor_disable(payload: TOTPVerifyIn, user: dict = Depends(get_current_user)):
+    secret = user.get("two_factor_secret")
+    if not user.get("two_factor_enabled") or not secret:
+        raise HTTPException(status_code=400, detail="2FA não está ativada")
+    if not pyotp.TOTP(secret).verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=401, detail="Código inválido")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"two_factor_enabled": False}, "$unset": {"two_factor_secret": "", "two_factor_secret_pending": ""}},
+    )
+    return {"enabled": False}
+
+
+@api.get("/auth/sessions")
+async def list_sessions(request: Request, user: dict = Depends(get_current_user)):
+    devices = await db.user_devices.find({"user_id": user["user_id"]}, {"_id": 0}).sort("last_seen", -1).to_list(200)
+    # Mark current device
+    current_device_id = None
+    at = request.cookies.get("access_token")
+    if at:
+        try:
+            payload = pyjwt.decode(at, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            current_device_id = payload.get("device_id")
+        except Exception:
+            pass
+    for d in devices:
+        d["current"] = d["device_id"] == current_device_id
+    return devices
+
+
+@api.delete("/auth/sessions/{device_id}")
+async def revoke_session(device_id: str, request: Request, response: Response, user: dict = Depends(get_current_user)):
+    res = await db.user_devices.delete_one({"device_id": device_id, "user_id": user["user_id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    # If revoking current device, clear its cookie
+    at = request.cookies.get("access_token")
+    if at:
+        try:
+            payload = pyjwt.decode(at, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            if payload.get("device_id") == device_id:
+                response.delete_cookie("access_token", path="/")
+                response.delete_cookie("session_token", path="/")
+        except Exception:
+            pass
+    return {"ok": True}
+
+
+# --- Biometric (WebAuthn) ---
+def _rp_id_from_request(request: Request) -> str:
+    host = (request.headers.get("host") or "localhost").split(":")[0]
+    return host
+
+
+def _origin_from_request(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto") or "https"
+    host = request.headers.get("host") or "localhost"
+    return f"{proto}://{host}"
+
+
+@api.post("/auth/biometric/register/options")
+async def biometric_register_options(request: Request, user: dict = Depends(get_current_user)):
+    challenge = pysecrets.token_bytes(32)
+    rp_id = _rp_id_from_request(request)
+    options = generate_registration_options(
+        rp_id=rp_id,
+        rp_name="SCOUT",
+        user_id=user["user_id"].encode("utf-8"),
+        user_name=user["email"],
+        user_display_name=user.get("name") or user["email"],
+        challenge=challenge,
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            user_verification=UserVerificationRequirement.PREFERRED,
+            resident_key=ResidentKeyRequirement.PREFERRED,
+        ),
+        supported_pub_key_algs=[COSEAlgorithmIdentifier.ECDSA_SHA_256, COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256],
+    )
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"webauthn_challenge": base64.b64encode(challenge).decode("ascii")}},
+    )
+    return json.loads(_wa_options_to_json(options))
+
+
+@api.post("/auth/biometric/register/verify")
+async def biometric_register_verify(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    challenge_b64 = user.get("webauthn_challenge")
+    if not challenge_b64:
+        raise HTTPException(status_code=400, detail="No challenge in progress")
+    rp_id = _rp_id_from_request(request)
+    origin = _origin_from_request(request)
+    try:
+        verification = verify_registration_response(
+            credential=body,
+            expected_challenge=base64.b64decode(challenge_b64),
+            expected_origin=origin,
+            expected_rp_id=rp_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Falha de verificação: {e}")
+    cred = {
+        "credential_id": base64.b64encode(verification.credential_id).decode("ascii"),
+        "public_key": base64.b64encode(verification.credential_public_key).decode("ascii"),
+        "sign_count": verification.sign_count,
+        "device_label": parse_user_agent(request.headers.get("user-agent", "")),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$push": {"biometric_credentials": cred}, "$unset": {"webauthn_challenge": ""}},
+    )
+    return {"enabled": True, "device_label": cred["device_label"]}
+
+
+@api.post("/auth/biometric/disable")
+async def biometric_disable(user: dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"biometric_credentials": []}},
+    )
+    return {"enabled": False}
+
+
+@api.post("/auth/biometric/auth/options")
+async def biometric_auth_options(request: Request):
+    body = await request.json()
+    email = (body.get("email") or "").lower().strip()
+    user = await db.users.find_one({"email": email}) if email else None
+    if not user or not user.get("biometric_credentials"):
+        raise HTTPException(status_code=404, detail="Biometria não disponível para este utilizador")
+    challenge = pysecrets.token_bytes(32)
+    rp_id = _rp_id_from_request(request)
+    allowed = [
+        PublicKeyCredentialDescriptor(id=base64.b64decode(c["credential_id"]))
+        for c in user["biometric_credentials"]
+    ]
+    options = generate_authentication_options(
+        rp_id=rp_id,
+        challenge=challenge,
+        allow_credentials=allowed,
+        user_verification=UserVerificationRequirement.PREFERRED,
+    )
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"webauthn_challenge": base64.b64encode(challenge).decode("ascii")}},
+    )
+    return {"options": json.loads(_wa_options_to_json(options)), "user_id": user["user_id"]}
+
+
+@api.post("/auth/biometric/auth/verify")
+async def biometric_auth_verify(request: Request, response: Response):
+    body = await request.json()
+    user_id = body.get("user_id")
+    user = await db.users.find_one({"user_id": user_id}) if user_id else None
+    if not user or not user.get("biometric_credentials"):
+        raise HTTPException(status_code=404, detail="User not found")
+    challenge_b64 = user.get("webauthn_challenge")
+    if not challenge_b64:
+        raise HTTPException(status_code=400, detail="No challenge in progress")
+    rp_id = _rp_id_from_request(request)
+    origin = _origin_from_request(request)
+    cred_data = body.get("credential")
+    if not cred_data:
+        raise HTTPException(status_code=400, detail="Missing credential")
+    cred_id_b64 = cred_data.get("id") or cred_data.get("rawId")
+    matched = next((c for c in user["biometric_credentials"] if c["credential_id"].rstrip("=") == (cred_id_b64 or "").rstrip("=")), None)
+    if not matched:
+        # Try to match by base64url decoding
+        for c in user["biometric_credentials"]:
+            try:
+                if base64.urlsafe_b64decode(c["credential_id"] + "==").rstrip(b"=") == base64.urlsafe_b64decode((cred_id_b64 or "") + "==").rstrip(b"="):
+                    matched = c
+                    break
+            except Exception:
+                pass
+    if not matched:
+        raise HTTPException(status_code=400, detail="Credencial não reconhecida")
+    try:
+        verification = verify_authentication_response(
+            credential=cred_data,
+            expected_challenge=base64.b64decode(challenge_b64),
+            expected_origin=origin,
+            expected_rp_id=rp_id,
+            credential_public_key=base64.b64decode(matched["public_key"]),
+            credential_current_sign_count=matched.get("sign_count", 0),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Falha biométrica: {e}")
+    # Update sign count
+    await db.users.update_one(
+        {"user_id": user["user_id"], "biometric_credentials.credential_id": matched["credential_id"]},
+        {"$set": {"biometric_credentials.$.sign_count": verification.new_sign_count}, "$unset": {"webauthn_challenge": ""}},
+    )
+    device_id = await create_session(user["user_id"], request)
+    response.set_cookie("access_token", create_access_token_with_device(user["user_id"], device_id), **cookie_kwargs())
     return serialize_user(user)
 
 

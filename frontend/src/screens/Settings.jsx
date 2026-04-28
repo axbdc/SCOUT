@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import TopBar from "../components/TopBar";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
-import { User, Bell, Shield, Info, ChevronRight, Logout, Stars, Smartphone, Fingerprint, RotateKey, Verified, Privacy, FileText, Sparkles, Globe } from "../components/Icons";
+import SecuritySettings from "./SecuritySettings";
+import { User, Bell, Shield, Info, ChevronRight, Logout, Stars, Sparkles, Globe, FileText, Privacy } from "../components/Icons";
 
 export default function Settings() {
     return (
@@ -149,49 +150,13 @@ function NotificationItem({ title, desc, checked, onChange, testid, compact }) {
     );
 }
 
-function SecuritySettings() {
-    return (
-        <div data-testid="security-settings">
-            <TopBar title="SEGURANÇA" subtitle="Status" />
-            <div className="px-5 pt-5">
-                <div className="bg-gradient-to-br from-green-600/10 to-transparent border border-green-500/30 rounded-2xl p-5 mb-6 text-center">
-                    <Verified size={32} className="text-green-500 mx-auto mb-2" />
-                    <div className="text-[10px] uppercase tracking-[0.3em] text-green-500 font-bold">Active Shield</div>
-                    <div className="font-display font-black text-2xl text-white mt-1">PROTECTED</div>
-                </div>
-
-                <div className="space-y-3">
-                    <Row Icon={RotateKey} label="Change Password" testid="sec-password" />
-                    <Row Icon={Verified} label="Two-Factor Authentication" testid="sec-2fa" />
-                    <Row Icon={Fingerprint} label="Biometric Login (Face/Touch ID)" testid="sec-bio" />
-                </div>
-
-                <h3 className="font-display font-bold text-white text-base mt-7 mb-3 flex items-center justify-between">
-                    Trusted Devices
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-red-500 font-bold">MANAGE ALL</span>
-                </h3>
-                <div className="bg-[#0F0F11] border border-white/5 rounded-xl p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center"><Smartphone size={18} /></div>
-                    <div className="flex-1">
-                        <div className="font-bold text-white text-sm">iPhone 15 Pro</div>
-                        <div className="text-zinc-500 text-[11px]">Current Device · Lisbon, PT</div>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[10px] font-bold uppercase tracking-wider">Live</span>
-                </div>
-
-                <div className="mt-6 text-zinc-500 text-[11px] leading-relaxed text-center">
-                    Os teus dados são encriptados com protocolos AES-256 de nível militar. Nunca partilhamos os teus dados biométricos.
-                </div>
-
-                <Link to="/settings/about" className="mt-4 w-full flex items-center gap-2 bg-[#0F0F11] border border-white/5 rounded-xl px-4 py-3 text-sm text-white" data-testid="sec-privacy">
-                    <Privacy size={16} className="text-zinc-400" />
-                    <span className="flex-1">Privacy Policy & Legal</span>
-                    <ChevronRight size={14} className="text-zinc-600" />
-                </Link>
-            </div>
-        </div>
-    );
+function SecuritySettingsLegacy() {
+    // Replaced by imported SecuritySettings — kept stub to avoid old references
+    return null;
 }
+
+// Legacy stub end
+
 
 function AboutSettings() {
     return (
