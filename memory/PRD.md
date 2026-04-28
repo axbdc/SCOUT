@@ -66,3 +66,17 @@ Build a mobile-first PWA based on a Stitch prototype, automotive events platform
 
 ## Test Credentials
 See /app/memory/test_credentials.md
+
+## v3 (current iteration)
+- 🐛 FIXED: bottom nav era escondido para utilizadores admin em modo membro — agora sempre visível em rotas de membro
+- ✅ FAB "Submeter" agora restrito apenas ao /calendar
+- ✅ Detalhe de parceria (/partnerships/:id) com **código de barras** (CODE-128 SVG via react-barcode), instruções de uso, e bloqueio com upsell para parcerias BLACK
+- ✅ Sistema de Pontos completo:
+  - Ganhar: reservar (+50), confirmar presença "Eu Vou" (+10, uma vez por evento), comprar foto (+20), submissão aprovada (+200), subscrever Black (+500)
+  - Gastar: 5 recompensas no catálogo (€5 OFF submissão, foto HD grátis, 1 mês Black, entrada evento até €30, voucher detailing)
+  - /rewards com 3 tabs (Gastar/Ganhar/Histórico) + modal de resgate com barcode
+- ✅ Botão "Eu Vou" no detalhe do evento + contagem de quem vai
+- ✅ Modal de partilha com WhatsApp / Telegram / Email / X / Copiar link
+- ✅ Admin Dashboard com **gráfico SVG de receita mensal** (stacked bars: Submissões/Subscrições/Fotos)
+- ✅ Anti-farming: pontos de "Eu Vou" só uma vez por evento, +200 de aprovação só uma vez por submissão
+- Tests: 40/40 backend passing, 100% frontend critical flows

@@ -402,14 +402,19 @@ async def toggle_attend(event_id: str, user: dict = Depends(get_current_user)):
     if existing:
         await db.attendances.delete_one({"_id": existing["_id"]})
         return {"attending": False}
+    # Track first-ever attendance to prevent point farming via toggle
+    already_rewarded = await db.attendance_rewards.find_one({"user_id": user["user_id"], "event_id": event_id})
+    points_earned = 0
+    if not already_rewarded:
+        await db.attendance_rewards.insert_one({"user_id": user["user_id"], "event_id": event_id, "ts": datetime.now(timezone.utc).isoformat()})
+        await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"points": 10}})
+        points_earned = 10
     await db.attendances.insert_one({
         "user_id": user["user_id"],
         "event_id": event_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    # +10 pts the first time per event for confirming attendance
-    await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"points": 10}})
-    return {"attending": True, "points_earned": 10}
+    return {"attending": True, "points_earned": points_earned}
 
 
 @api.get("/events/{event_id}/attendance")
@@ -642,9 +647,11 @@ async def admin_approve(event_id: str, _: dict = Depends(require_admin)):
     )
     if not res:
         raise HTTPException(status_code=404, detail="Event not found")
-    # Reward submitter with +200 points if it was a user submission
-    if res.get("submitted_by"):
+    # Reward submitter ONCE — guard with submitter_rewarded flag
+    if res.get("submitted_by") and not res.get("submitter_rewarded"):
         await db.users.update_one({"user_id": res["submitted_by"]}, {"$inc": {"points": 200}})
+        await db.events.update_one({"event_id": event_id}, {"$set": {"submitter_rewarded": True}})
+        res["submitter_rewarded"] = True
     return res
 
 
