@@ -1,5 +1,4 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { useAuth } from "../lib/AuthContext";
 import { Calendar, User, Gauge, Map } from "./Icons";
 
 const tabs = [
@@ -11,15 +10,13 @@ const tabs = [
 
 export default function BottomNav() {
     const loc = useLocation();
-    const { user } = useAuth();
     const hide =
         ["/login", "/register", "/", "/splash", "/auth/callback"].includes(loc.pathname) ||
         loc.pathname.startsWith("/admin");
     if (hide) return null;
-    if (user?.role === "admin") return null;
     return (
         <nav
-            className="absolute bottom-0 left-0 right-0 h-[72px] bg-black/85 backdrop-blur-xl border-t border-white/5 flex justify-around items-stretch z-40"
+            className="absolute bottom-0 left-0 right-0 h-[72px] bg-black/90 backdrop-blur-xl border-t border-white/5 flex justify-around items-stretch z-50"
             data-testid="bottom-nav"
         >
             {tabs.map(({ to, label, Icon, testid }) => (

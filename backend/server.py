@@ -393,6 +393,32 @@ async def book_event(event_id: str, user: dict = Depends(get_current_user)):
     return {"ok": True, "booking_id": booking["booking_id"], "points_earned": 50}
 
 
+@api.post("/events/{event_id}/attend")
+async def toggle_attend(event_id: str, user: dict = Depends(get_current_user)):
+    ev = await db.events.find_one({"event_id": event_id})
+    if not ev or ev.get("status") != "approved":
+        raise HTTPException(status_code=404, detail="Event not found")
+    existing = await db.attendances.find_one({"user_id": user["user_id"], "event_id": event_id})
+    if existing:
+        await db.attendances.delete_one({"_id": existing["_id"]})
+        return {"attending": False}
+    await db.attendances.insert_one({
+        "user_id": user["user_id"],
+        "event_id": event_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    # +10 pts the first time per event for confirming attendance
+    await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"points": 10}})
+    return {"attending": True, "points_earned": 10}
+
+
+@api.get("/events/{event_id}/attendance")
+async def event_attendance(event_id: str, user: dict = Depends(get_current_user)):
+    count = await db.attendances.count_documents({"event_id": event_id})
+    mine = await db.attendances.find_one({"event_id": event_id, "user_id": user["user_id"]})
+    return {"count": count, "attending": bool(mine)}
+
+
 @api.get("/bookings/me")
 async def my_bookings(user: dict = Depends(get_current_user)):
     docs = await db.bookings.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(500)
@@ -514,7 +540,9 @@ async def buy_photo(photo_id: str, user: dict = Depends(get_current_user)):
         "amount": photo["price"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"ok": True, "amount": photo["price"]}
+    # +20 pts for buying a photo
+    await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"points": 20}})
+    return {"ok": True, "amount": photo["price"], "points_earned": 20}
 
 
 @api.get("/photos/me")
@@ -614,6 +642,9 @@ async def admin_approve(event_id: str, _: dict = Depends(require_admin)):
     )
     if not res:
         raise HTTPException(status_code=404, detail="Event not found")
+    # Reward submitter with +200 points if it was a user submission
+    if res.get("submitted_by"):
+        await db.users.update_one({"user_id": res["submitted_by"]}, {"$inc": {"points": 200}})
     return res
 
 
@@ -695,6 +726,86 @@ async def admin_delete_photo(photo_id: str, _: dict = Depends(require_admin)):
     if r.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Photo not found")
     return {"ok": True}
+
+
+@api.get("/admin/revenue/monthly")
+async def admin_revenue_monthly(_: dict = Depends(require_admin)):
+    """Aggregate revenue per month from submission fees + photo purchases + subscriptions."""
+    out: dict = {}
+
+    def add(month_key: str, source: str, amount: float):
+        if month_key not in out:
+            out[month_key] = {"month": month_key, "submissions": 0.0, "photos": 0.0, "subscriptions": 0.0, "total": 0.0}
+        out[month_key][source] += amount
+        out[month_key]["total"] += amount
+
+    async for doc in db.payment_tokens.find({"used": True, "purpose": "event_submission"}):
+        ts = doc.get("created_at") or ""
+        if len(ts) >= 7:
+            add(ts[:7], "submissions", float(doc.get("amount", 0)))
+
+    async for doc in db.photo_purchases.find({}):
+        ts = doc.get("created_at") or ""
+        if len(ts) >= 7:
+            add(ts[:7], "photos", float(doc.get("amount", 0)))
+
+    async for doc in db.subscriptions.find({}):
+        ts = doc.get("started_at") or ""
+        if len(ts) >= 7:
+            add(ts[:7], "subscriptions", float(doc.get("amount", 0)))
+
+    return sorted(out.values(), key=lambda x: x["month"])
+
+
+# ----------------- Rewards System -----------------
+REWARDS_CATALOG = [
+    {"reward_id": "rw_001", "title": "€5 OFF Submissão de Evento", "cost": 500, "icon": "ticket", "description": "Desconto de €5 na próxima submissão de evento.", "type": "submission_discount", "value": 5},
+    {"reward_id": "rw_002", "title": "1 Foto HD Grátis", "cost": 1000, "icon": "camera", "description": "Resgata uma foto HD à tua escolha sem marca-de-água.", "type": "photo_credit", "value": 1},
+    {"reward_id": "rw_003", "title": "1 Mês Scout Black", "cost": 2500, "icon": "stars", "description": "Acesso BLACK ativado durante 30 dias.", "type": "black_month", "value": 30},
+    {"reward_id": "rw_004", "title": "Entrada Evento (até €30)", "cost": 3000, "icon": "trophy", "description": "Reserva grátis num evento pago até €30.", "type": "event_credit", "value": 30},
+    {"reward_id": "rw_005", "title": "Pack Detailing -50%", "cost": 1500, "icon": "wrench", "description": "Voucher 50% OFF em parceiro detailing.", "type": "voucher", "value": 50},
+]
+
+
+@api.get("/rewards/catalog")
+async def rewards_catalog():
+    return REWARDS_CATALOG
+
+
+@api.get("/rewards/me")
+async def my_rewards(user: dict = Depends(get_current_user)):
+    redemptions = await db.reward_redemptions.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return redemptions
+
+
+@api.post("/rewards/{reward_id}/redeem")
+async def redeem_reward(reward_id: str, user: dict = Depends(get_current_user)):
+    reward = next((r for r in REWARDS_CATALOG if r["reward_id"] == reward_id), None)
+    if not reward:
+        raise HTTPException(status_code=404, detail="Recompensa não encontrada")
+    fresh_user = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    if (fresh_user.get("points") or 0) < reward["cost"]:
+        raise HTTPException(status_code=400, detail=f"Pontos insuficientes (precisas de {reward['cost']})")
+    code = uuid.uuid4().hex[:10].upper()
+    redemption = {
+        "redemption_id": f"rd_{uuid.uuid4().hex[:10]}",
+        "user_id": user["user_id"],
+        "reward_id": reward_id,
+        "title": reward["title"],
+        "cost": reward["cost"],
+        "code": code,
+        "type": reward["type"],
+        "value": reward["value"],
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.reward_redemptions.insert_one(redemption)
+    await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"points": -reward["cost"]}})
+    # If it's a Black month reward, activate black for 30 days
+    if reward["type"] == "black_month":
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"is_black": True}})
+    redemption.pop("_id", None)
+    return redemption
 
 
 # ----------------- Seed Data -----------------

@@ -41,8 +41,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-4 gap-2 mb-6 reveal reveal-2">
                 <QuickAction to="/calendar" Icon={Calendar} label="Eventos" active />
                 <QuickAction to="/map" Icon={Map} label="Mapa" />
-                <QuickAction to="/submit-event" Icon={Plus} label="Submeter" />
-                <QuickAction to="/scout-black" Icon={Stars} label="Black" gold />
+                <QuickAction to="/rewards" Icon={Stars} label="Pontos" />
+                <QuickAction to="/scout-black" Icon={Trophy} label="Black" gold />
             </div>
 
             {/* Upcoming events strip */}
@@ -163,7 +163,8 @@ function QuickAction({ to, Icon, label, active, gold }) {
 
 function PartnerRow({ p, locked, elite, delay = 0 }) {
     return (
-        <div
+        <Link
+            to={`/partnerships/${p.partnership_id}`}
             className={`flex items-center gap-3 bg-[#0F0F11] border ${elite ? "border-[#D4AF37]/20" : "border-white/5"} rounded-xl p-3 hover:border-white/15 transition reveal`}
             style={{ animationDelay: `${0.1 + delay * 0.05}s` }}
             data-testid={`partner-${p.partnership_id}`}
@@ -182,7 +183,7 @@ function PartnerRow({ p, locked, elite, delay = 0 }) {
             ) : (
                 <ChevronRight size={16} className="text-zinc-500" />
             )}
-        </div>
+        </Link>
     );
 }
 

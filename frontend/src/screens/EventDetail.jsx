@@ -16,11 +16,18 @@ export default function EventDetail() {
     const [favorite, setFavorite] = useState(false);
     const [photos, setPhotos] = useState([]);
     const [purchasing, setPurchasing] = useState(null);
+    const [attending, setAttending] = useState(false);
+    const [attendCount, setAttendCount] = useState(0);
+    const [showShare, setShowShare] = useState(false);
 
     useEffect(() => {
         api.get(`/events/${id}`).then(({ data }) => setEv(data)).catch(() => navigate("/calendar"));
         api.get("/favorites/me").then(({ data }) => setFavorite(data.some((e) => e.event_id === id)));
         api.get(`/events/${id}/photos`).then(({ data }) => setPhotos(data)).catch(() => {});
+        api.get(`/events/${id}/attendance`).then(({ data }) => {
+            setAttending(data.attending);
+            setAttendCount(data.count);
+        }).catch(() => {});
     }, [id, navigate]);
 
     if (!ev) return <div className="text-zinc-500 text-center py-20 font-mono-tech text-xs uppercase tracking-widest">A carregar...</div>;
@@ -83,11 +90,16 @@ export default function EventDetail() {
     };
 
     const shareEvent = () => {
-        const url = window.location.href;
-        if (navigator.share) navigator.share({ title: ev.title, text: ev.description, url });
-        else {
-            navigator.clipboard.writeText(url);
-            alert("Link copiado!");
+        setShowShare(true);
+    };
+
+    const toggleAttend = async () => {
+        try {
+            const { data } = await api.post(`/events/${id}/attend`);
+            setAttending(data.attending);
+            setAttendCount((c) => c + (data.attending ? 1 : -1));
+        } catch (e) {
+            alert(formatApiErrorDetail(e.response?.data?.detail) || e.message);
         }
     };
 
@@ -186,6 +198,30 @@ export default function EventDetail() {
                             </div>
                         </div>
 
+                        {/* "Eu Vou" attendance */}
+                        <div className="mt-4 bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-500/25 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-[0.25em] text-blue-300/70 font-mono-tech">Quem Vai</div>
+                                    <div className="font-display font-black text-2xl text-white">{attendCount} <span className="text-base text-zinc-500 font-normal">{attendCount === 1 ? "pessoa" : "pessoas"}</span></div>
+                                </div>
+                                <button
+                                    onClick={toggleAttend}
+                                    data-testid="event-attend-btn"
+                                    className={`h-11 px-5 rounded-md text-xs font-display font-bold uppercase tracking-widest transition flex items-center gap-2 ${
+                                        attending
+                                            ? "bg-green-600 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)]"
+                                            : "bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+                                    }`}
+                                >
+                                    {attending ? <><Check size={14} strokeWidth={3} /> Vou</> : <>Eu Vou</>}
+                                </button>
+                            </div>
+                            <div className="text-zinc-500 text-[11px] leading-relaxed">
+                                Marca presença para ganhares <span className="text-green-400 font-bold">+10 pts</span> e ajudar a comunidade a saber a dimensão do evento.
+                            </div>
+                        </div>
+
                         {error && <div className="mt-4 text-red-400 text-xs bg-red-500/10 border border-red-500/20 px-3 py-2 rounded" data-testid="booking-error">{error}</div>}
                         {success && (
                             <div className="mt-4 bg-green-600/10 border border-green-500/30 rounded-xl p-4 text-green-400 text-sm" data-testid="booking-success">
@@ -261,6 +297,47 @@ export default function EventDetail() {
                         </div>
                     </div>
                 )}
+            </div>
+
+            {showShare && <ShareSheet ev={ev} onClose={() => setShowShare(false)} />}
+        </div>
+    );
+}
+
+function ShareSheet({ ev, onClose }) {
+    const url = window.location.href;
+    const message = `Vamos a este evento? "${ev.title}" — ${ev.date} em ${ev.location_name}. Mais info na app SCOUT: ${url}`;
+    const channels = [
+        { id: "whatsapp", label: "WhatsApp", color: "bg-green-600", href: `https://wa.me/?text=${encodeURIComponent(message)}` },
+        { id: "telegram", label: "Telegram", color: "bg-sky-500", href: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(ev.title)}` },
+        { id: "email", label: "Email", color: "bg-zinc-700", href: `mailto:?subject=${encodeURIComponent(ev.title)}&body=${encodeURIComponent(message)}` },
+        { id: "x", label: "X / Twitter", color: "bg-black border border-white/20", href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}` },
+    ];
+    return (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm" onClick={onClose} data-testid="share-sheet">
+            <div className="w-full max-w-[430px] bg-[#0a0a0a] rounded-t-3xl border-t border-white/10 p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-5">
+                    <div className="font-display font-bold text-white text-lg">Partilhar Evento</div>
+                    <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center" data-testid="close-share">
+                        <ArrowLeft size={14} />
+                    </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                    {channels.map((c) => (
+                        <a key={c.id} href={c.href} target="_blank" rel="noopener noreferrer"
+                            data-testid={`share-${c.id}`}
+                            className={`h-14 rounded-xl ${c.color} text-white font-display font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:opacity-90`}>
+                            {c.label}
+                        </a>
+                    ))}
+                </div>
+                <button
+                    onClick={() => { navigator.clipboard.writeText(url); alert("Link copiado!"); }}
+                    data-testid="share-copy"
+                    className="w-full h-12 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold uppercase tracking-widest text-xs"
+                >
+                    Copiar Link
+                </button>
             </div>
         </div>
     );

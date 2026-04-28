@@ -65,17 +65,19 @@ export default function Profile() {
                     <Mini Icon={Camera} label="Fotos" value={photos.length} />
                 </div>
 
-                <div className="mt-4 bg-gradient-to-br from-red-600/10 to-transparent border border-red-500/20 rounded-xl p-4">
+                <Link to="/rewards" className="mt-4 block bg-gradient-to-br from-red-600/15 via-[#0F0F11] to-[#0F0F11] border border-red-500/25 rounded-xl p-4 hover:border-red-500/40 transition" data-testid="profile-rewards-card">
                     <div className="flex items-baseline justify-between mb-2">
-                        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 font-mono-tech">SCOUT Points</div>
-                        <Stars size={14} className="text-yellow-400" />
+                        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 font-mono-tech flex items-center gap-1.5">
+                            <Stars size={11} className="text-yellow-400" /> SCOUT Points · Trocar
+                        </div>
+                        <ArrowRight size={14} className="text-red-500" />
                     </div>
                     <div className="font-display font-black text-3xl text-white">{points} pts</div>
                     <div className="text-zinc-500 text-[10px] mt-1">Próximo Nível: {nextLevel} pts · {pct}%</div>
                     <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mt-2">
                         <div className="h-full bg-gradient-to-r from-red-700 to-red-500" style={{ width: `${pct}%` }} />
                     </div>
-                </div>
+                </Link>
 
                 {/* Tabs: My Events */}
                 <div className="mt-7">

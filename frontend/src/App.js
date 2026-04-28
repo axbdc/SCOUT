@@ -17,7 +17,9 @@ import Settings from "@/screens/Settings";
 import ScoutBlack from "@/screens/ScoutBlack";
 import Checkout from "@/screens/Checkout";
 import Partnerships from "@/screens/Partnerships";
+import PartnershipDetail from "@/screens/PartnershipDetail";
 import SubmitEvent from "@/screens/SubmitEvent";
+import Rewards from "@/screens/Rewards";
 import Admin from "@/screens/Admin";
 
 function AppRouter() {
@@ -45,7 +47,9 @@ function AppRouter() {
                 <Route path="/scout-black" element={<ScoutBlack />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/partnerships" element={<Partnerships />} />
+                <Route path="/partnerships/:id" element={<PartnershipDetail />} />
                 <Route path="/submit-event" element={<SubmitEvent />} />
+                <Route path="/rewards" element={<Rewards />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -73,10 +73,12 @@ function AdminTab({ to, Icon, label, testid, end }) {
 function AdminDashboard() {
     const [stats, setStats] = useState(null);
     const [pending, setPending] = useState([]);
+    const [monthly, setMonthly] = useState([]);
 
     useEffect(() => {
         api.get("/admin/stats").then(({ data }) => setStats(data));
         api.get("/admin/events?status=pending").then(({ data }) => setPending(data));
+        api.get("/admin/revenue/monthly").then(({ data }) => setMonthly(data));
     }, []);
 
     if (!stats) return <div className="text-zinc-500 text-center py-20 font-mono-tech text-xs uppercase tracking-widest">A carregar...</div>;
@@ -120,6 +122,20 @@ function AdminDashboard() {
                 </div>
             </div>
 
+            {/* Monthly Revenue Chart */}
+            <div className="bg-[#0F0F11] border border-white/5 rounded-xl p-4 mb-6" data-testid="admin-revenue-chart">
+                <div className="flex items-baseline justify-between mb-3">
+                    <h3 className="font-display font-bold text-white">Receita por Mês</h3>
+                    <span className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 font-mono-tech">EUR</span>
+                </div>
+                <RevenueChart data={monthly} />
+                <div className="flex items-center gap-4 mt-3 text-[10px]">
+                    <Legend color="#E53935" label="Submissões" />
+                    <Legend color="#D4AF37" label="Subscrições" />
+                    <Legend color="#3B82F6" label="Fotos" />
+                </div>
+            </div>
+
             <h2 className="font-display font-bold text-white text-base mb-3 flex items-center justify-between">
                 Eventos em Revisão
                 <NavLink to="/admin/events" className="text-[10px] uppercase tracking-[0.15em] text-red-500 font-bold flex items-center gap-1">
@@ -142,6 +158,55 @@ function AdminDashboard() {
                 ))}
             </div>
         </div>
+    );
+}
+
+function Legend({ color, label }) {
+    return (
+        <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ background: color }} />
+            <span className="text-zinc-400 uppercase tracking-widest font-mono-tech">{label}</span>
+        </div>
+    );
+}
+
+function RevenueChart({ data }) {
+    if (!data || data.length === 0) {
+        return <div className="text-center text-zinc-600 text-[11px] uppercase tracking-widest py-8" data-testid="revenue-chart-empty">Sem receita registada ainda</div>;
+    }
+    const max = Math.max(...data.map((m) => m.total), 1);
+    const W = 360;
+    const H = 140;
+    const PAD = 24;
+    const slot = (W - PAD * 2) / Math.max(data.length, 4);
+    const barW = Math.min(slot - 12, 44);
+    return (
+        <svg viewBox={`0 0 ${W} ${H + 40}`} className="w-full" data-testid="revenue-chart">
+            {[0.25, 0.5, 0.75, 1].map((p) => (
+                <line key={p} x1={PAD} x2={W - PAD} y1={H - p * H + 5} y2={H - p * H + 5} stroke="rgba(255,255,255,0.05)" />
+            ))}
+            {data.map((m, i) => {
+                const cx = PAD + slot * i + slot / 2;
+                const x = cx - barW / 2;
+                const subH = (m.submissions / max) * H;
+                const subsH = (m.subscriptions / max) * H;
+                const phH = (m.photos / max) * H;
+                let y = H + 5;
+                return (
+                    <g key={m.month} data-testid={`bar-${m.month}`}>
+                        <rect x={x} y={y - subH} width={barW} height={subH} fill="#E53935" rx={2} />
+                        <rect x={x} y={y - subH - subsH} width={barW} height={subsH} fill="#D4AF37" rx={2} />
+                        <rect x={x} y={y - subH - subsH - phH} width={barW} height={phH} fill="#3B82F6" rx={2} />
+                        <text x={cx} y={H + 22} textAnchor="middle" fill="#71717a" fontSize="9" fontFamily="JetBrains Mono">
+                            {m.month.slice(5)}/{m.month.slice(2, 4)}
+                        </text>
+                        <text x={cx} y={y - subH - subsH - phH - 4} textAnchor="middle" fill="#fafafa" fontSize="9" fontWeight="700">
+                            €{Math.round(m.total)}
+                        </text>
+                    </g>
+                );
+            })}
+        </svg>
     );
 }
 

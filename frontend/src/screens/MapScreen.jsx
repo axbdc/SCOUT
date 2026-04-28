@@ -127,7 +127,7 @@ export default function MapScreen() {
                     center={center}
                     zoom={11}
                     scrollWheelZoom={true}
-                    style={{ height: "calc(100vh - 230px)", minHeight: 460, width: "100%" }}
+                    style={{ height: "calc(100vh - 280px)", minHeight: 400, width: "100%" }}
                     data-testid="map-container"
                 >
                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
