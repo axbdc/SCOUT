@@ -269,7 +269,7 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 
 
 def cookie_kwargs():
-    return dict(httponly=True, secure=True, samesite="none", max_age=7 * 24 * 60 * 60, path="/")
+    return dict(httponly=True, secure=False, samesite="lax", max_age=7 * 24 * 60 * 60, path="/")
 
 
 # ----------------- Auth Endpoints -----------------
